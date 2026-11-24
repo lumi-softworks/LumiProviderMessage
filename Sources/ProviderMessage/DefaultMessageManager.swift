@@ -138,6 +138,14 @@ public final class DefaultMessageManager: MessageManaging {
         changeObservers.values.forEach { $0(.deleted(messageID: id, conversationID: conversationID)) }
     }
 
+    public func deleteMessages(from messageID: UUID, in conversationID: UUID) {
+        let ordered = messages(for: conversationID)
+        guard let index = ordered.firstIndex(where: { $0.id == messageID }) else { return }
+        let removedIDs = Set(ordered[index...].map(\.id))
+        storage[conversationID]?.removeAll { removedIDs.contains($0.id) }
+        changeObservers.values.forEach { $0(.truncated(messageID: messageID, conversationID: conversationID)) }
+    }
+
     public func updateToolCallResult(
         _ result: MessageToolResult,
         toolCallID: String,
