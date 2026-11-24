@@ -12,6 +12,8 @@ public enum MessageChange: Sendable {
     case updated(conversationID: UUID)
     /// 消息被删除。
     case deleted(messageID: UUID, conversationID: UUID)
+    /// `messageID` 及其之后的全部消息被删除，更早的消息保持不变。
+    case truncated(messageID: UUID, conversationID: UUID)
     /// 指定会话的消息被清空。
     case cleared(conversationID: UUID)
 }
@@ -101,6 +103,11 @@ public protocol MessageManaging: AnyObject {
     func insertMessage(_ message: Message, to conversationID: UUID)
     func updateMessage(id: UUID, in conversationID: UUID, content: String)
     func deleteMessage(id: UUID, in conversationID: UUID)
+    /// 删除 `messageID` 以及该会话中排在它之后的全部消息。
+    ///
+    /// 排序与持久化存储一致：先按 `createdAt`，相同时间再按 `id.uuidString`。
+    /// `messageID` 不存在时什么都不做。
+    func deleteMessages(from messageID: UUID, in conversationID: UUID)
     func clearMessages(in conversationID: UUID)
 
     /// 更新某条 assistant 消息中指定工具调用的结果（渲染层展示成功/失败/耗时）。
@@ -258,6 +265,25 @@ public extension MessageManaging {
         )
     }
 
+
+    /// 默认实现逐条调用 `deleteMessage`，因此观察者收到的是每条消息各自的 `.deleted`，
+    /// 而不是单个 `.truncated`。
+    func deleteMessages(from messageID: UUID, in conversationID: UUID) {
+        let ordered = Self.timelineOrder(messages(for: conversationID))
+        guard let index = ordered.firstIndex(where: { $0.id == messageID }) else { return }
+        for message in ordered[index...] {
+            deleteMessage(id: message.id, in: conversationID)
+        }
+    }
+
+    /// 消息的时间线顺序：`createdAt` 相同时按 `id.uuidString` 排序，
+    /// 与 `messagePage` 及持久化存储的顺序一致。
+    static func timelineOrder(_ messages: [Message]) -> [Message] {
+        messages.sorted {
+            if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
+            return $0.createdAt < $1.createdAt
+        }
+    }
 
     func addMessageInsertedObserver(
         _ callback: @escaping (Message, UUID) -> Void
