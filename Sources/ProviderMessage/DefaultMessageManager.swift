@@ -139,7 +139,7 @@ public final class DefaultMessageManager: MessageManaging {
     }
 
     public func deleteMessages(from messageID: UUID, in conversationID: UUID) {
-        let ordered = Self.timelineOrder(storage[conversationID] ?? [])
+        let ordered = messages(for: conversationID)
         guard let index = ordered.firstIndex(where: { $0.id == messageID }) else { return }
         let removedIDs = Set(ordered[index...].map(\.id))
         storage[conversationID]?.removeAll { removedIDs.contains($0.id) }

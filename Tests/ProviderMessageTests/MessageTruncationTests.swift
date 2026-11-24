@@ -79,7 +79,7 @@ struct MessageTruncationTests {
         #expect(changes.isEmpty)
     }
 
-    @Test("同一时间的消息按 id 顺序决定谁在目标之后")
+    @Test("同一时间的消息按时间线返回顺序决定谁在目标之后")
     func sameTimestampOrderingIsPreserved() {
         let manager = DefaultMessageManager()
         let conversationID = UUID()
@@ -89,7 +89,8 @@ struct MessageTruncationTests {
         }
         // 乱序插入，确认截断不依赖插入顺序。
         for message in messages.reversed() { manager.insertMessage(message, to: conversationID) }
-        let expectedOrder = DefaultMessageManager.timelineOrder(messages).map(\.id)
+        // 截断沿着 `messages(for:)` 的顺序切：同一时间的消息不再另行排序。
+        let expectedOrder = manager.messages(for: conversationID).map(\.id)
         let target = expectedOrder[2]
 
         manager.deleteMessages(from: target, in: conversationID)

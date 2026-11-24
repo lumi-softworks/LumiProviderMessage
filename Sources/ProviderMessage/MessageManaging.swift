@@ -105,7 +105,7 @@ public protocol MessageManaging: AnyObject {
     func deleteMessage(id: UUID, in conversationID: UUID)
     /// 删除 `messageID` 以及该会话中排在它之后的全部消息。
     ///
-    /// 排序与持久化存储一致：先按 `createdAt`，相同时间再按 `id.uuidString`。
+    /// “之后”按实现的 `messages(for:)` 返回顺序判断，与该实现展示的时间线一致。
     /// `messageID` 不存在时什么都不做。
     func deleteMessages(from messageID: UUID, in conversationID: UUID)
     func clearMessages(in conversationID: UUID)
@@ -268,20 +268,14 @@ public extension MessageManaging {
 
     /// 默认实现逐条调用 `deleteMessage`，因此观察者收到的是每条消息各自的 `.deleted`，
     /// 而不是单个 `.truncated`。
+    ///
+    /// “目标之后”按实现自己的 `messages(for:)` 返回顺序判断，截断范围因此与
+    /// 该实现展示的时间线一致；`createdAt` 相同的消息不另行排序。
     func deleteMessages(from messageID: UUID, in conversationID: UUID) {
-        let ordered = Self.timelineOrder(messages(for: conversationID))
+        let ordered = messages(for: conversationID)
         guard let index = ordered.firstIndex(where: { $0.id == messageID }) else { return }
         for message in ordered[index...] {
             deleteMessage(id: message.id, in: conversationID)
-        }
-    }
-
-    /// 消息的时间线顺序：`createdAt` 相同时按 `id.uuidString` 排序，
-    /// 与 `messagePage` 及持久化存储的顺序一致。
-    static func timelineOrder(_ messages: [Message]) -> [Message] {
-        messages.sorted {
-            if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
-            return $0.createdAt < $1.createdAt
         }
     }
 
